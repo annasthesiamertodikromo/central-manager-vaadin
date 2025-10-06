@@ -15,6 +15,11 @@ import com.vaadin.flow.server.auth.AnonymousAllowed;
 import com.vaadin.flow.server.menu.MenuConfiguration;
 import com.vaadin.flow.server.menu.MenuEntry;
 import com.vaadin.flow.theme.lumo.LumoUtility;
+import com.bludots.views.dashboard.DashboardView;
+import com.bludots.views.home.HomeView;
+import com.vaadin.flow.router.RouterLink;
+
+
 import java.util.List;
 
 /**
@@ -55,14 +60,12 @@ public class MainLayout extends AppLayout {
     private SideNav createNavigation() {
         SideNav nav = new SideNav();
 
-        List<MenuEntry> menuEntries = MenuConfiguration.getMenuEntries();
-        menuEntries.forEach(entry -> {
-            if (entry.icon() != null) {
-                nav.addItem(new SideNavItem(entry.title(), entry.path(), new SvgIcon(entry.icon())));
-            } else {
-                nav.addItem(new SideNavItem(entry.title(), entry.path()));
-            }
-        });
+        // Voeg direct SideNavItems toe met label en view-class
+        SideNavItem home = new SideNavItem("Home", HomeView.class);
+        SideNavItem dashboard = new SideNavItem("Dashboard", DashboardView.class);
+
+        nav.addItem(home);
+        nav.addItem(dashboard);
 
         return nav;
     }
