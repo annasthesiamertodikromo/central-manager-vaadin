@@ -17,6 +17,7 @@ import com.vaadin.flow.server.menu.MenuEntry;
 import com.vaadin.flow.theme.lumo.LumoUtility;
 import com.bludots.views.dashboard.DashboardView;
 import com.bludots.views.home.HomeView;
+import com.bludots.views.logs.LogViewerView;
 import com.vaadin.flow.router.RouterLink;
 
 
@@ -63,9 +64,11 @@ public class MainLayout extends AppLayout {
         // Voeg direct SideNavItems toe met label en view-class
         SideNavItem home = new SideNavItem("Home", HomeView.class);
         SideNavItem dashboard = new SideNavItem("Dashboard", DashboardView.class);
+        SideNavItem logViewer = new SideNavItem("Log Viewer", LogViewerView.class);
 
         nav.addItem(home);
         nav.addItem(dashboard);
+        nav.addItem(logViewer);
 
         return nav;
     }
@@ -85,4 +88,7 @@ public class MainLayout extends AppLayout {
     private String getCurrentPageTitle() {
         return MenuConfiguration.getPageHeader(getContent()).orElse("");
     }
+
+
+
 }

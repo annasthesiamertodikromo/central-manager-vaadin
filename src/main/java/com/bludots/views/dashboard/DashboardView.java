@@ -2,14 +2,23 @@ package com.bludots.views.dashboard;
 
 import com.bludots.entities.TomcatInstanceEntity;
 import com.bludots.services.TomcatInstanceService;
+
+import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.button.Button;
+import com.vaadin.flow.component.contextmenu.MenuItem;
+import com.vaadin.flow.component.contextmenu.SubMenu;
 import com.vaadin.flow.component.dialog.Dialog;
 import com.vaadin.flow.component.formlayout.FormLayout;
 import com.vaadin.flow.component.grid.Grid;
 import com.vaadin.flow.component.html.H1;
+import com.vaadin.flow.component.html.H3;
+import com.vaadin.flow.component.html.Image;
 import com.vaadin.flow.component.html.Span;
+import com.vaadin.flow.component.menubar.MenuBar;
 import com.vaadin.flow.component.notification.Notification;
+import com.vaadin.flow.component.orderedlayout.FlexComponent;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
+import com.vaadin.flow.component.orderedlayout.Scroller;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.component.select.Select;
 import com.vaadin.flow.component.textfield.TextField;
@@ -17,10 +26,12 @@ import com.vaadin.flow.data.value.ValueChangeMode;
 import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
 import com.vaadin.flow.server.auth.AnonymousAllowed;
+
 import org.springframework.beans.factory.annotation.Autowired;
 
 import java.util.List;
 import java.util.stream.Collectors;
+
 
 @PageTitle("Dashboard")
 @Route(value = "dashboard", layout = com.bludots.views.MainLayout.class)
@@ -30,67 +41,119 @@ public class DashboardView extends VerticalLayout {
     private final TomcatInstanceService service;
     private final Grid<TomcatInstanceEntity> grid;
     private List<TomcatInstanceEntity> allInstances;
-    private final TextField searchField;
+    private TextField searchField;
     private final Span resultsCount;
-
 
     @Autowired
     public DashboardView(TomcatInstanceService service) {
         this.service = service;
 
-        setSpacing(true);
-        setPadding(true);
-        add(new H1("Tomcat Instances Dashboard"));
+        setSizeFull();
+        setPadding(false);
+        setSpacing(false);
 
-        // 🔍 Search Field
+        // HEADER
+        HorizontalLayout header = createHeader();
+        add(header);
+
+        // Filterbar
+        HorizontalLayout filterBar = createFilterBar();
+        add(filterBar);
+
+        // Result count
+        resultsCount = new Span();
+        resultsCount.getStyle()
+                .set("font-size", "14px")
+                .set("color", "#666")
+                .set("margin", "8px 0 0 12px");
+        add(resultsCount);
+
+        // GRID
+        grid = new Grid<>(TomcatInstanceEntity.class, false);
+        grid.addColumn(TomcatInstanceEntity::getName).setHeader("Client").setAutoWidth(true);
+        grid.addComponentColumn(this::createStatusBadge).setHeader("Status").setAutoWidth(true);
+        grid.addColumn(TomcatInstanceEntity::getIpAddress).setHeader("IP Address").setAutoWidth(true);
+        grid.addComponentColumn(this::createActionMenu).setHeader("Actions").setAutoWidth(true);
+
+        Scroller gridScroller = new Scroller(grid);
+        gridScroller.setSizeFull();
+        gridScroller.setScrollDirection(Scroller.ScrollDirection.BOTH);
+
+        add(gridScroller);
+        setFlexGrow(1, gridScroller);
+
+        refreshData();
+    }
+
+    // HEADER (Logo + Titel + Menu)
+    private HorizontalLayout createHeader() {
+        HorizontalLayout header = new HorizontalLayout();
+        header.setWidthFull();
+        header.setAlignItems(FlexComponent.Alignment.CENTER);
+        header.getStyle()
+                .set("background-color", "#2E3A59")
+                .set("color", "white")
+                .set("padding", "10px 20px")
+                .set("box-shadow", "0 2px 6px rgba(0,0,0,0.15)");
+
+        Image logo = new Image("https://cdn-icons-png.flaticon.com/512/882/882702.png", "BluDots Logo");
+        logo.setWidth("40px");
+        logo.setHeight("40px");
+
+        VerticalLayout titleLayout = new VerticalLayout();
+        titleLayout.setSpacing(false);
+        titleLayout.setPadding(false);
+        titleLayout.add(
+                new H1("BluDots Central Manager"),
+                new H3("Tomcat Instances Dashboard")
+        );
+        titleLayout.getStyle().set("color", "white");
+
+        // Profile Menu
+        MenuBar profileMenu = new MenuBar();
+        MenuItem userItem = profileMenu.addItem("👤 Admin");
+        SubMenu submenu = userItem.getSubMenu();
+        submenu.addItem("⚙️ Settings", e -> Notification.show("Settings feature coming soon."));
+        submenu.addItem("🚪 Logout", e -> Notification.show("Logout not implemented yet."));
+
+        header.add(logo, titleLayout);
+        header.expand(titleLayout);
+        header.add(profileMenu);
+        return header;
+    }
+
+
+    // FILTERBAR
+    private HorizontalLayout createFilterBar() {
         searchField = new TextField();
-        searchField.setPlaceholder("🔍 Search by Client Name or Status...");
+        searchField.setPlaceholder("🔍 Search by Client or Status...");
         searchField.setClearButtonVisible(true);
         searchField.setWidth("280px");
         searchField.setValueChangeMode(ValueChangeMode.EAGER);
 
-        // 🧭 Dropdown Filter (Status)
         Select<String> statusFilter = new Select<>();
         statusFilter.setItems("All", "Running", "Stopped", "Deploying");
         statusFilter.setValue("All");
         statusFilter.setWidth("150px");
 
-        // 🔄 Refresh + ➕ Add buttons
         Button refreshButton = new Button("🔄 Refresh", e -> refreshData());
         Button addButton = new Button("➕ Add Instance", e -> openAddDialog());
         addButton.getStyle().set("background-color", "#4CAF50").set("color", "white");
 
-        // Event listeners
-        searchField.addValueChangeListener(e ->
-                filterData(searchField.getValue(), statusFilter.getValue()));
-        statusFilter.addValueChangeListener(e ->
-                filterData(searchField.getValue(), statusFilter.getValue()));
+        HorizontalLayout bar = new HorizontalLayout(searchField, statusFilter, refreshButton, addButton);
+        bar.setWidthFull();
+        bar.setAlignItems(FlexComponent.Alignment.END);
+        bar.setJustifyContentMode(FlexComponent.JustifyContentMode.BETWEEN);
+        bar.getStyle()
+                .set("padding", "10px 20px")
+                .set("border-bottom", "1px solid #ddd")
+                .set("background-color", "#FAFAFA");
 
-        // 📋 Toolbar layout
-        HorizontalLayout topBar = new HorizontalLayout(searchField, statusFilter, refreshButton, addButton);
-        topBar.setSpacing(true);
-        topBar.setAlignItems(Alignment.END);
-        add(topBar);
+        // Listeners
+        searchField.addValueChangeListener(e -> filterData(searchField.getValue(), statusFilter.getValue()));
+        statusFilter.addValueChangeListener(e -> filterData(searchField.getValue(), statusFilter.getValue()));
 
-        // 📊 Label dat aantal resultaten toont
-        resultsCount = new Span();
-        resultsCount.getStyle()
-                .set("font-size", "14px")
-                .set("color", "#555")
-                .set("margin-left", "5px");
-
-        add(resultsCount);
-
-
-        // 📊 Grid
-        grid = new Grid<>(TomcatInstanceEntity.class, false);
-        grid.addColumn(TomcatInstanceEntity::getName).setHeader("Client");
-        grid.addComponentColumn(this::createStatusBadge).setHeader("Status");
-        grid.addColumn(TomcatInstanceEntity::getIpAddress).setHeader("IP Address");
-        grid.addComponentColumn(this::createActions).setHeader("Actions");
-        add(grid);
-
-        refreshData();
+        return bar;
     }
 
     private void refreshData() {
@@ -99,33 +162,40 @@ public class DashboardView extends VerticalLayout {
         updateResultsCount(allInstances.size(), allInstances.size());
     }
 
-
-    // 🔎 Filter Logic
+    // ----------------- Filter via service -----------------
     private void filterData(String textFilter, String statusFilter) {
-        if (allInstances == null) return;
+        // Haal gefilterde data op via service
+        List<TomcatInstanceEntity> filtered = service.searchAndFilter(textFilter, statusFilter);
 
-        String search = (textFilter == null ? "" : textFilter.trim().toLowerCase());
-        String status = (statusFilter == null ? "All" : statusFilter);
-
-        List<TomcatInstanceEntity> filtered = allInstances.stream()
-                .filter(i ->
-                        (i.getName().toLowerCase().contains(search)
-                                || i.getStatus().toLowerCase().contains(search))
-                                && ("All".equals(status) || i.getStatus().equalsIgnoreCase(status))
-                )
-                .collect(Collectors.toList());
-
+        // Toon gefilterde resultaten
         grid.setItems(filtered);
-        updateResultsCount(filtered.size(), allInstances.size());
+
+        // Update teller
+        updateResultsCount(filtered.size(), allInstances == null ? filtered.size() : allInstances.size());
     }
 
 
-    // 🟢 Add Instance Popup
+    // ACTIES via 3-dot Menu
+    private MenuBar createActionMenu(TomcatInstanceEntity instance) {
+        MenuBar menuBar = new MenuBar();
+        MenuItem main = menuBar.addItem("⋮");
+        SubMenu sub = main.getSubMenu();
+
+        sub.addItem("▶️ Start", e -> asyncStart(instance, e.getSource()));
+        sub.addItem("⏹️ Stop", e -> asyncStop(instance, e.getSource()));
+        sub.addItem("🔁 Redeploy", e -> asyncRedeploy(instance, e.getSource()));
+        sub.addItem("✏️ Edit", e -> openEditDialog(instance));
+        sub.addItem("🗑️ Delete", e -> openDeleteConfirmation(instance));
+
+        return menuBar;
+    }
+
+    // ADD DIALOG
     private void openAddDialog() {
         Dialog dialog = new Dialog();
         dialog.setHeaderTitle("Add New Tomcat Instance");
 
-        TextField nameField = new TextField("Client name");
+        TextField nameField = new TextField("Client Name");
         TextField statusField = new TextField("Status (Running / Stopped / Deploying)");
         TextField ipField = new TextField("IP Address");
 
@@ -137,14 +207,13 @@ public class DashboardView extends VerticalLayout {
         statusField.setHelperText("Allowed values: Running, Stopped, Deploying");
         ipField.setHelperText("e.g. 10.0.0.12");
 
-        Button saveButton = new Button("Save", e -> {
+        Button save = new Button("Save", e -> {
             String name = nameField.getValue().trim();
             String status = statusField.getValue().trim();
             String ip = ipField.getValue().trim();
 
-            // 🧩 Validation
             if (name.isEmpty() || status.isEmpty() || ip.isEmpty()) {
-                Notification.show("⚠️ Please fill in all fields!");
+                Notification.show("⚠️ Please fill all fields!");
                 return;
             }
             if (!status.matches("(?i)Running|Stopped|Deploying")) {
@@ -163,105 +232,127 @@ public class DashboardView extends VerticalLayout {
             refreshData();
         });
 
-        Button cancelButton = new Button("Cancel", e -> dialog.close());
-        cancelButton.getStyle().set("background-color", "#9E9E9E").set("color", "white");
-        saveButton.getStyle().set("background-color", "#4CAF50").set("color", "white");
+        Button cancel = new Button("Cancel", e -> dialog.close());
+        cancel.getStyle().set("background-color", "#9E9E9E").set("color", "white");
+        save.getStyle().set("background-color", "#4CAF50").set("color", "white");
 
-        FormLayout form = new FormLayout(nameField, statusField, ipField);
-        HorizontalLayout buttons = new HorizontalLayout(saveButton, cancelButton);
-
-        dialog.add(form, buttons);
+        dialog.add(new FormLayout(nameField, statusField, ipField), new HorizontalLayout(save, cancel));
         dialog.open();
     }
 
-    private HorizontalLayout createActions(TomcatInstanceEntity instance) {
-        // 🟡 Edit
-        Button edit = new Button("Edit", e -> openEditDialog(instance));
-        edit.getStyle().set("background-color", "#FFC107").set("color", "black");
-
-        // 🔴 Delete (confirmation)
-        Button delete = new Button("Delete", e -> openDeleteConfirmation(instance));
-        delete.getStyle().set("background-color", "#F44336").set("color", "white");
-
-        return new HorizontalLayout(edit, delete);
-    }
-
-    // ⚙️ Edit Dialog
+    // Edit
     private void openEditDialog(TomcatInstanceEntity instance) {
         Dialog dialog = new Dialog();
         dialog.setHeaderTitle("Edit Instance");
 
-        TextField nameEdit = new TextField("Client Name", instance.getName());
-        TextField statusEdit = new TextField("Status", instance.getStatus());
-        TextField ipEdit = new TextField("IP Address", instance.getIpAddress());
+        TextField nameField = new TextField("Client Name");
+        TextField statusField = new TextField("Status (Running / Stopped / Deploying)");
+        TextField ipField = new TextField("IP Address");
+
+        // Prefill values
+        nameField.setValue(instance.getName());
+        statusField.setValue(instance.getStatus());
+        ipField.setValue(instance.getIpAddress());
+
+        // Same UI requirements as Add
+        nameField.setRequiredIndicatorVisible(true);
+        statusField.setRequiredIndicatorVisible(true);
+        ipField.setRequiredIndicatorVisible(true);
+
+        nameField.setHelperText("Enter Firstname and Lastname");
+        statusField.setHelperText("Allowed values: Running, Stopped, Deploying");
+        ipField.setHelperText("e.g. 10.0.0.12");
 
         Button save = new Button("Save", e -> {
-            String name = nameEdit.getValue().trim();
-            String status = statusEdit.getValue().trim();
-            String ip = ipEdit.getValue().trim();
+            String name = nameField.getValue().trim();
+            String status = statusField.getValue().trim();
+            String ip = ipField.getValue().trim();
 
             if (name.isEmpty() || status.isEmpty() || ip.isEmpty()) {
-                Notification.show("⚠️ Please fill in all fields!");
+                Notification.show("⚠️ Please fill all fields!");
                 return;
             }
+
             if (!status.matches("(?i)Running|Stopped|Deploying")) {
-                Notification.show("⚠️ Invalid status!");
+                Notification.show("⚠️ Invalid status! Use: Running, Stopped or Deploying.");
                 return;
             }
+
             if (!ip.matches("^((25[0-5]|2[0-4][0-9]|[0-1]?[0-9][0-9]?)\\.){3}(25[0-5]|2[0-4][0-9]|[0-1]?[0-9][0-9]?)$")) {
                 Notification.show("⚠️ Invalid IP address!");
                 return;
             }
 
+            // Apply changes only if valid
             instance.setName(name);
             instance.setStatus(status);
             instance.setIpAddress(ip);
             service.save(instance);
-            Notification.show("✅ Instance updated successfully!");
+
+            Notification.show("✅ Updated successfully!");
             dialog.close();
             refreshData();
         });
 
         Button cancel = new Button("Cancel", e -> dialog.close());
-        save.getStyle().set("background-color", "#4CAF50").set("color", "white");
         cancel.getStyle().set("background-color", "#9E9E9E").set("color", "white");
+        save.getStyle().set("background-color", "#4CAF50").set("color", "white");
 
-        FormLayout editForm = new FormLayout(nameEdit, statusEdit, ipEdit);
-        HorizontalLayout actions = new HorizontalLayout(save, cancel);
-
-        dialog.add(editForm, actions);
+        dialog.add(new FormLayout(nameField, statusField, ipField), new HorizontalLayout(save, cancel));
         dialog.open();
     }
 
-    // 🗑️ Delete Confirmation Dialog
+    // Delete
     private void openDeleteConfirmation(TomcatInstanceEntity instance) {
-        Dialog confirmDialog = new Dialog();
-        confirmDialog.setHeaderTitle("Confirm Deletion");
-
-        Span message = new Span("Are you sure you want to delete \"" + instance.getName() + "\"?");
-        Button confirm = new Button("Yes, Delete", e -> {
+        Dialog confirm = new Dialog();
+        confirm.setHeaderTitle("Confirm Deletion");
+        Span msg = new Span("Are you sure you want to delete \"" + instance.getName() + "\"?");
+        Button yes = new Button("Yes, Delete", e -> {
             service.delete(instance.getId());
             Notification.show("🗑️ Instance deleted successfully.");
-            confirmDialog.close();
+            confirm.close();
             refreshData();
         });
-        Button cancel = new Button("Cancel", e -> confirmDialog.close());
-
-        confirm.getStyle().set("background-color", "#F44336").set("color", "white");
-        cancel.getStyle().set("background-color", "#9E9E9E").set("color", "white");
-
-        HorizontalLayout buttons = new HorizontalLayout(confirm, cancel);
-        confirmDialog.add(message, buttons);
-        confirmDialog.open();
+        Button cancel = new Button("Cancel", e -> confirm.close());
+        confirm.add(msg, new HorizontalLayout(yes, cancel));
+        confirm.open();
     }
 
-    // 📈 Telt resultaten
+    // ASYNC Start (knop disablen)
+    private void asyncStart(TomcatInstanceEntity instance, MenuItem item) {
+        item.setEnabled(false);
+        service.startInstanceAsync(instance, UI.getCurrent())
+                .thenRun(() -> UI.getCurrent().access(() -> {
+                    item.setEnabled(true);
+                    refreshData();
+                }));
+    }
+
+    // ASYNC Stop
+    private void asyncStop(TomcatInstanceEntity instance, MenuItem item) {
+        item.setEnabled(false);
+        service.stopInstanceAsync(instance, UI.getCurrent())
+                .thenRun(() -> UI.getCurrent().access(() -> {
+                    item.setEnabled(true);
+                    refreshData();
+                }));
+    }
+
+    // ASYNC Redeploy
+    private void asyncRedeploy(TomcatInstanceEntity instance, MenuItem item) {
+        item.setEnabled(false);
+        service.redeployInstanceAsync(instance, UI.getCurrent())
+                .thenRun(() -> UI.getCurrent().access(() -> {
+                    item.setEnabled(true);
+                    refreshData();
+                }));
+    }
+
     private void updateResultsCount(int visible, int total) {
         resultsCount.setText("Showing " + visible + " of " + total + " instances");
     }
 
-
-    // 🎨 Status Badges
+    // Status Badge
     private Span createStatusBadge(TomcatInstanceEntity instance) {
         Span badge = new Span(instance.getStatus());
         badge.getStyle()

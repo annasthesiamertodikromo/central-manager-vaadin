@@ -8,6 +8,7 @@ import com.vaadin.flow.theme.Theme;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
+import org.springframework.scheduling.annotation.EnableAsync;
 /**
  * The entry point of the Spring Boot application.
  *
@@ -15,6 +16,7 @@ import org.springframework.context.annotation.Bean;
  * and some desktop browsers.
  *
  */
+@EnableAsync
 @SpringBootApplication
 @Theme(value = "central-manager")
 public class Application implements AppShellConfigurator {
